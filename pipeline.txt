@@ -1,0 +1,51 @@
+pipeline {
+    agent any
+
+    environment {
+        MAVEN_HOME = '/usr/share/maven' // Update with the correct Maven installation path
+        TOMCAT_USER = 'azureuser'
+        TOMCAT_HOST = '52.158.245.98'
+        TOMCAT_PATH = '/home/azureuser/tomcat/apache-tomcat-9.0.97'
+    }
+
+    stages {
+        stage('Clone_project') {
+            steps {
+                git branch:’master’ , url:’https://github.com/manjunath14321/Amazon’
+            }
+        }
+
+        stage('Build the Project') {
+            steps {
+                // Clean and build the Maven project
+                sh "${MAVEN_HOME}/bin/mvn clean package"
+            }
+        }
+
+        stage('Push Artifact to Azure Artifacts') {
+            steps {
+                // Deploy the artifact to Azure Artifacts
+                sh "${MAVEN_HOME}/bin/mvn deploy"
+            }
+        }
+
+        stage('Deploy to Tomcat') {
+            steps {
+                // Copy the generated WAR file to the Tomcat webapps directory
+                sh """
+                scp target/*.war ${TOMCAT_USER}@${TOMCAT_HOST}:${TOMCAT_PATH}
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check the logs.'
+        }
+    }
+}
+
