@@ -2,50 +2,81 @@ pipeline {
     agent any
 
     environment {
-        MAVEN_HOME = '/usr/share/maven' // Update with the correct Maven installation path
-        TOMCAT_USER = 'azureuser'
-        TOMCAT_HOST = '52.158.245.98'
-        TOMCAT_PATH = '/home/azureuser/tomcat/apache-tomcat-9.0.97'
+        GIT_REPO = 'https://github.com/manjunath14321/ABC-1611.git' // Your Git repository URL
+        GIT_BRANCH = 'main' // Specify the branch to build
+        AZURE_REPO_URL = 'https://pkgs.dev.azure.com/adikarthikgupta/_packaging/adikarthikgupta/maven/v1'
+		AZURE_TOKEN = "K7FpQhzHCIFUEDONcD6ggrwJb4tgbdDOmHaiK9pJsg1neUb3vcTZJQQJ99AKACAAAAA8yzi4AAASAZDOnOsr"
+        ARTIFACT_ID = 'adikarthikgupta'  // The ID of your artifact
+        GROUP_ID = 'com.example'  // The group ID of your project
+        VERSION = '1.0.0'  // Version to deploy
+        TOMCAT_SERVER = 'http://52.158.245.98:8080/'  // URL of the Tomcat server
+        TOMCAT_USER = 'admin'  // Tomcat server username
+        TOMCAT_PASSWORD = 'Password123@'  // Tomcat server password
+		WORK_DIR = 'my-webapp'
     }
-
+    tools {
+        maven 'Maven 3.9.9'  // Replace with the Maven version you have configured in Jenkins' Global Tool Configuration
+    }
     stages {
-        stage('Clone_project') {
+        stage('Checkout Code') {
             steps {
-                git branch:’master’ , url:’https://github.com/manjunath14321/Amazon’
+                git branch: "${GIT_BRANCH}", url: "${GIT_REPO}"
+            }
+        }
+		
+        stage('Build with Maven') {
+            steps {
+                dir("${WORK_DIR}") {
+                    script {
+                        // Run Maven to build the project and create the artifact
+                        sh 'mvn clean install -DskipTests'
+                    }
+                }
             }
         }
 
-        stage('Build the Project') {
+        stage('Push Artifact to Azure Repo') {
             steps {
-                // Clean and build the Maven project
-                sh "${MAVEN_HOME}/bin/mvn clean package"
-            }
-        }
+                script {
+				dir("${WORK_DIR}") {
+                    // Configure Maven to use Azure repository
+                    sh """
+                    echo '<settings>
+                        <servers>
+                            <server>
+                                <id>adikarthikgupta</id>
+                                <username>adikarthikgupta</username>
+                                <password>"${AZURE_TOKEN}"</password>
+                            </server>
+                        </servers>
+                    </settings>' > /usr/share/maven/conf/settings.xml
+                    """
+                    // Deploy the artifact to the Azure Artifacts Maven repository
+                   sh "'${tool 'Maven 3.9.9'}/bin/mvn' deploy -f pom.xml -s settings.xml"
 
-        stage('Push Artifact to Azure Artifacts') {
-            steps {
-                // Deploy the artifact to Azure Artifacts
-                sh "${MAVEN_HOME}/bin/mvn deploy"
+                }
             }
         }
+	}
 
         stage('Deploy to Tomcat') {
             steps {
-                // Copy the generated WAR file to the Tomcat webapps directory
-                sh """
-                scp target/*.war ${TOMCAT_USER}@${TOMCAT_HOST}:${TOMCAT_PATH}
-                """
+                script {
+                    // Deploy the application to Tomcat server (example: WAR file)
+                    sh """
+                    curl -u ${TOMCAT_USER}:${TOMCAT_PASSWORD} \
+                        -T target/${ARTIFACT_ID}-${VERSION}.war \
+                        ${TOMCAT_SERVER}/manager/text/deploy?path=/yourAppName&update=true
+                    """
+                }
             }
         }
     }
 
     post {
-        success {
-            echo 'Pipeline completed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed. Check the logs.'
+        always {
+            // Echo finished
+            echo 'Finished'
         }
     }
 }
-
